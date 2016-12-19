@@ -1,0 +1,55 @@
+#!/bin/bash
+
+adb kill-server
+adb start-server
+adb devices
+
+DESKTOP_KEEPASS_FILE=passwords.kdbx
+DROID_KEEPASS_FILE=/storage/emulated/0/keepass/passwords.kdbx
+
+# Check if file exists on desktop
+if [ -e $DESKTOP_KEEPASS_FILE ]; then
+    echo found on desktop -- $DESKTOP_KEEPASS_FILE
+else
+    echo No file found on desktop at -- $DESKTOP_KEEPASS_FILE
+    echo If you have one on your phone, do -- adb pull $DROID_KEEPASS_FILE $DESKTOP_KEEPASS_FILE
+    exit
+fi
+
+# Check if file exists on phone
+DROID_FILE_EXISTS=$(adb shell "if [ -e $DROID_KEEPASS_FILE ]; then echo 1; else echo
+0; fi")
+FILE_EXISTS_CODE=1
+if [ $DROID_FILE_EXISTS==$FILE_EXISTS_CODE ]; then
+    echo found on phone -- $DROID_KEEPASS_FILE
+else
+    echo No file found on phone at -- $DROID_KEEPASS_FILE
+    echo You have one on your desktop, do -- adb push $DESKTOP_KEEPASS_FILE $DROID_KEEPASS_FILE
+    exit
+fi
+
+echo \
+
+# Get the time each file was last modified. In stat, %Y gets you a unix timestamp of when the file
+# was last modified.
+DESKTOP_KEEPASS_TIME=$(stat -c %Y $DESKTOP_KEEPASS_FILE)
+DROID_KEEPASS_TIME=$(sudo adb shell "stat -c %Y $DROID_KEEPASS_FILE")
+
+echo desktop file -- $DESKTOP_KEEPASS_FILE -- last modified -- $DESKTOP_KEEPASS_TIME
+echo phone file -- $DROID_KEEPASS_FILE -- last modified -- $DROID_KEEPASS_TIME
+
+# Strip out the end of line special character. The line that retrieves the last modified time for
+# the Abdroid file has a carriage return. 
+DROID_KEEPASS_TIME_CLEAN=$(echo $DROID_KEEPASS_TIME | sed 's/\r//')
+
+echo \
+
+# Replace oldest file with newest file
+if [[ $DESKTOP_KEEPASS_TIME -gt $DROID_KEEPASS_TIME_CLEAN ]]; then
+    echo Desktop modified most recently. Pushing to phone.
+    adb push $DESKTOP_KEEPASS_FILE $DROID_KEEPASS_FILE
+else
+    echo Android modified most recently. Pulling to desktop.
+    adb pull $DROID_KEEPASS_FILE $DESKTOP_KEEPASS_FILE
+fi
+
